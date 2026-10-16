@@ -7166,7 +7166,7 @@ body > .sticky-back-btn,
 /* =========================================================
    MINUMAN MOBILE — HILANGKAN HEADER GLOBAL
    Visual only: tidak mengubah JS, Firebase, ID, atau event.
-   Logo + "SANDAGA MINISOCCER 2" disembunyikan hanya
+   Logo + "SANDAGA MINISOCCER" disembunyikan hanya
    ketika halaman MINUMAN aktif di layar HP.
    ========================================================= */
 @media (max-width: 640px) {
@@ -7697,7 +7697,7 @@ body > .sticky-back-btn,
 <style id="final-mobile-header-and-cash-contrast-v1">
 /* =========================================================
    FINAL MOBILE FIX V1
-   1) Kembalikan logo + header SANDAGA MINISOCCER 2 di halaman MINUMAN HP.
+   1) Kembalikan logo + header SANDAGA MINISOCCER di halaman MINUMAN HP.
    2) Perjelas teks "Sisa Cash Tanggal" pada Uang Keluar.
    3) Perjelas label + nominal Daily Recap Kas Hari Ini.
    Visual only — tidak mengubah JS, Firebase, ID, atau event.
@@ -10578,9 +10578,9 @@ body > header {
 <!-- Header -->
 <header class="w-full max-w-6xl flex flex-col items-center justify-center gap-2 mb-6 text-center">
 <img class="w-30 h-24 sm:w-30 sm:h-28 object-contain rounded-xl" src="logo.png"/>
-<h1 class="admin-global-header-title" aria-label="SANDAGA MINISOCCER 2">
+<h1 class="admin-global-header-title" aria-label="SANDAGA MINISOCCER">
   <span class="admin-global-header-main-title">JADWAL TIM HARI INI</span>
-  <span class="admin-global-header-brand-title">SANDAGA MINISOCCER 2</span>
+  <span class="admin-global-header-brand-title">SANDAGA MINISOCCER</span>
 </h1>
 </header>
 <main class="w-full max-w-6xl space-y-6">
@@ -13026,14 +13026,14 @@ document.addEventListener('input', function(e){
         import { getDatabase, ref, push, remove, update, onValue, get, query, orderByChild, startAt } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-database.js";
 
         const firebaseConfig = {
-            apiKey: "AIzaSyDO6gVCRzTClDEwAS2FAWZVf-pB5CG2Pbc",
-            authDomain: "foto-mahasiswa.firebaseapp.com",
-            databaseURL: "https://foto-mahasiswa-default-rtdb.firebaseio.com",
-            projectId: "foto-mahasiswa",
-            storageBucket: "foto-mahasiswa.firebasestorage.app",
-            messagingSenderId: "829974127023",
-            appId: "1:829974127023:web:95f3f0dfe36e2644f40f5a",
-            measurementId: "G-ZYMW08YG9Y"
+            apiKey: "AIzaSyB_Fk-mCS90h0mACN9IVJ2L9PiNbOlS2Q8",
+            authDomain: "miniso1.firebaseapp.com",
+            databaseURL: "https://miniso1-default-rtdb.firebaseio.com",
+            projectId: "miniso1",
+            storageBucket: "miniso1.firebasestorage.app",
+            messagingSenderId: "102176965901",
+            appId: "1:102176965901:web:0f72097a34f5872fd79c44",
+            measurementId: "G-7126DPKSRJ"
         };
 
         const app = initializeApp(firebaseConfig);
@@ -16587,8 +16587,8 @@ const diskonManualEl = document.getElementById('in-diskon-manual');
             const bulanDepan = new Date(now.getFullYear(), now.getMonth() + 1, 1);
             const bulan = new Intl.DateTimeFormat('id-ID', { month: 'long' }).format(bulanDepan);
             const pesan =
-                `Permisi kak 🙏😊 kami dari tim admin Sandaga Minisoccer 2 ⚽ ingin konfirmasi untuk ${String(nama || 'tim ini')}, ` +
-                `apakah di bulan ${bulan} 📅 ingin melanjutkan menjadi member di Sandaga Minisoccer 2? ` +
+                `Permisi kak 🙏😊 kami dari tim admin Sandaga Minisoccer ⚽ ingin konfirmasi untuk ${String(nama || 'tim ini')}, ` +
+                `apakah di bulan ${bulan} 📅 ingin melanjutkan menjadi member di Sandaga Minisoccer? ` +
                 `Kami tunggu konfirmasinya ya kak 🙌 Terimakasih 🙏✨`;
 
             const url = getWhatsAppUrl(nomor, pesan);
@@ -45856,7 +45856,7 @@ body > header .admin-global-header-brand-title{
 /* =========================================================
    FINAL FIX — POSISI TEKS HEADER TETAP SAAT PINDAH MENU
    Baris judul dan brand memakai tinggi/baris yang tetap agar
-   "SANDAGA MINISOCCER 2" tidak ikut bergeser ketika judul
+   "SANDAGA MINISOCCER" tidak ikut bergeser ketika judul
    halaman berbeda panjang.
    ========================================================= */
 body > header .admin-global-header-title{
