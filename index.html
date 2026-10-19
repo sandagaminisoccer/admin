@@ -19670,6 +19670,67 @@ const diskonManualEl = document.getElementById('in-diskon-manual');
             if (typeof window.renderTeamList === 'function') scheduleRender(window.renderTeamList);
         });
 
+        // =========================================================
+        // CERMIN TIM TAMBAHAN -> web customer
+        // Web customer membaca daftar tim dari node `member` dan
+        // `memberTanpaJadwal` (hanya nama + logo). Supaya 1 member dengan 2-3
+        // tim tampil sebagai 3 tim terpisah di customer, setiap nama tim
+        // tambahan dicerminkan sebagai 1 record di `memberTanpaJadwal`
+        // (key tetap `multitim_<nama>`, ditandai multiTim:true). Record cermin
+        // ini disembunyikan dari tampilan admin (admin sudah menampilkannya
+        // dari data member) dan otomatis ditambah/diubah/dihapus mengikuti
+        // data member, jadi tidak perlu dikelola manual.
+        // =========================================================
+        function mirrorKeyTim(nama) {
+            let t = String(nama || '');
+            try { t = t.normalize('NFKC'); } catch (e) {}
+            t = t.trim().replace(/\s+/g, ' ').toLowerCase();
+            return 'multitim_' + encodeURIComponent(t).replace(/\./g, '%2E');
+        }
+        let __mirrorBusy = false, __mirrorPending = false, __mirrorLastSig;
+        async function syncMirrorTimTambahan() {
+            if (__mirrorBusy) { __mirrorPending = true; return; }
+            const desired = new Map();
+            (globalCache.memberRawEntries || []).forEach(m => {
+                if (!m || m.isOff) return;
+                window.__timTambahanList(m.timTambahan, m.nama).forEach(n => {
+                    const k = mirrorKeyTim(n);
+                    const wa = String(m.wa || '').trim();
+                    const cur = desired.get(k);
+                    if (!cur) desired.set(k, { nama: n, wa, timUtama: String(m.nama || '') });
+                    else if (!cur.wa && wa) cur.wa = wa;
+                });
+            });
+            const sig = JSON.stringify(Array.from(desired.entries()));
+            if (sig === __mirrorLastSig) return;
+            __mirrorBusy = true;
+            try {
+                const snap = await get(ref(db, 'memberTanpaJadwal'));
+                const existing = snap.exists() ? (snap.val() || {}) : {};
+                const ops = [];
+                desired.forEach((d, k) => {
+                    const ex = existing[k];
+                    if (!ex || ex.nama !== d.nama || String(ex.wa || '') !== d.wa || ex.timUtama !== d.timUtama) {
+                        ops.push(update(ref(db, 'memberTanpaJadwal/' + k), {
+                            nama: d.nama, wa: d.wa, status: 'Member',
+                            multiTim: true, timUtama: d.timUtama, updatedAt: Date.now()
+                        }));
+                    }
+                });
+                Object.entries(existing).forEach(([k, v]) => {
+                    if (v && v.multiTim === true && !desired.has(k)) ops.push(remove(ref(db, 'memberTanpaJadwal/' + k)));
+                });
+                await Promise.all(ops);
+                __mirrorLastSig = sig;
+            } catch (err) {
+                console.warn('Sinkron tim tambahan ke customer gagal:', err);
+            } finally {
+                __mirrorBusy = false;
+                if (__mirrorPending) { __mirrorPending = false; syncMirrorTimTambahan(); }
+            }
+        }
+        window.syncMirrorTimTambahan = syncMirrorTimTambahan;
+
         cachedOnValue('member', ref(db, 'member'), (snapshot) => {
             globalCache.member = {};
             let listTbody = document.getElementById('tabel-list-member');
@@ -19905,6 +19966,8 @@ const diskonManualEl = document.getElementById('in-diskon-manual');
             });
 
             renderAll();
+            clearTimeout(window.__mirrorTimTimer);
+            window.__mirrorTimTimer = setTimeout(syncMirrorTimTambahan, 1500);
         });
 
         /* =========================================================
@@ -20103,6 +20166,7 @@ const diskonManualEl = document.getElementById('in-diskon-manual');
             if (snapshot.exists()) {
                 snapshot.forEach(child => {
                     const m = child.val() || {};
+                    if (m.multiTim === true) return; // cermin tim tambahan untuk web customer
                     _memberTanpaJadwalActiveCache[child.key] = {
                         ...m,
                         id: child.key
@@ -30284,7 +30348,7 @@ async function muatMemberTanpaJadwal() {
         if (snap.exists()) {
             const raw = snap.val() || {};
             Object.entries(raw).forEach(([id, item]) => {
-                if (item && typeof item === 'object') {
+                if (item && typeof item === 'object' && item.multiTim !== true) {
                     memberTanpaJadwalCache.push({ id, ...item });
                 }
             });
