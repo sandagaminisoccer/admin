@@ -19745,6 +19745,14 @@ const diskonManualEl = document.getElementById('in-diskon-manual');
                         return window.jamSortKey(a.jam).localeCompare(window.jamSortKey(b.jam));
                     });
 
+                    // 1 member bisa punya 2 nama tim tambahan (total 3 tim, masing-masing punya logo sendiri).
+                    const timExtra = (() => {
+                        for (const e of entries) {
+                            const l = window.__timTambahanList(e.timTambahan, group.nama);
+                            if (l.length) return l;
+                        }
+                        return [];
+                    })();
                     const firstActive = entries.find(e => !e.isOff) || entries[0];
                     const waEntry = entries.find(e => e.wa) || firstActive;
                     const hasWa = entries.some(e => !!e.wa);
@@ -19833,8 +19841,13 @@ const diskonManualEl = document.getElementById('in-diskon-manual');
                                          data-team-logo-name="${escapeAttrLogo(encodeURIComponent(String(group.nama)))}">
                                         ${renderTeamLogoHtml(group.nama, 'member-list-team-logo')}
                                     </div>
+                                    ${timExtra.map(n => `<div class="member-team-logo-indicator"
+                                         data-team-logo-name="${escapeAttrLogo(encodeURIComponent(String(n)))}">
+                                        ${renderTeamLogoHtml(n, 'member-list-team-logo')}
+                                    </div>`).join('')}
                                     <div class="member-team-copy">
                                         <div class="member-team-name">${escapeHtmlSparing(group.nama)}</div>
+                                        ${timExtra.length ? `<div class="member-team-count">Tim lain: ${timExtra.map(n => escapeHtmlSparing(n)).join(', ')}</div>` : ''}
                                         <div class="member-team-count">${entries.length} jadwal digabung</div>
                                     </div>
                                 </div>
@@ -19860,6 +19873,12 @@ const diskonManualEl = document.getElementById('in-diskon-manual');
                                     📲 Perpanjang
                                 </button>
                                 ${logoButton}
+                                ${timExtra.map((n, i) => `<button type="button"
+                                        onclick="openTeamLogoEditor(decodeURIComponent('${encodeURIComponent(String(n))}'),'member')"
+                                        title="Logo ${escapeHtmlSparing(n)}"
+                                        class="bg-indigo-700 hover:bg-indigo-800 text-white">
+                                    Logo ${i + 2}
+                                </button>`).join('')}
                             </div>
                         </article>
                     `;
@@ -22791,7 +22810,9 @@ return;
             return Object.values(globalCache.member || {}).some(perHari =>
                 Object.values(perHari || {}).some(cell =>
                     cell && cell.nama &&
-                    String(cell.nama).trim().toLowerCase() === target &&
+                    (String(cell.nama).trim().toLowerCase() === target ||
+                     (window.__timTambahanList ? window.__timTambahanList(cell.timTambahan, cell.nama) : [])
+                        .some(x => String(x).trim().toLowerCase() === target)) &&
                     String(cell.status || 'Member').trim().toLowerCase() !== 'non member'
                 )
             );
@@ -34628,6 +34649,7 @@ function tlAdd(map,name,wa,source){
 function tlCollect(){
   const map={};
   Object.values(cache.memberRawEntries||[]).forEach(m=>tlAdd(map,m?.nama,m?.wa,'Member'));
+  Object.values(cache.memberRawEntries||[]).forEach(m=>(window.__timTambahanList?window.__timTambahanList(m?.timTambahan,m?.nama):[]).forEach(x=>tlAdd(map,x,m?.wa,'Member')));
   Object.values(cache.memberTanpaJadwal||{}).forEach(m=>tlAdd(map,m?.nama,m?.wa,'Member'));
   Object.values(cache.booking||{}).forEach(b=>tlAdd(map,b?.nama,b?.wa || b?.noHp,'Booking'));
   Object.values(cache.sparing||{}).forEach(sp=>{
@@ -34641,6 +34663,7 @@ function tlFindWaFromRecords(sourceName){
   const n=tlNorm(sourceName);
   const check=(name,wa)=>{if(!found && tlNorm(name)===n && String(wa||'').trim()) found=String(wa).trim();};
   Object.values(cache.memberRawEntries||[]).forEach(m=>check(m?.nama,m?.wa));
+  Object.values(cache.memberRawEntries||[]).forEach(m=>(window.__timTambahanList?window.__timTambahanList(m?.timTambahan,m?.nama):[]).forEach(x=>check(x,m?.wa)));
   Object.values(cache.memberTanpaJadwal||{}).forEach(m=>check(m?.nama,m?.wa));
   Object.values(cache.booking||{}).forEach(b=>check(b?.nama,b?.wa || b?.noHp));
   Object.values(cache.sparing||{}).forEach(sp=>{check(sp?.timA,sp?.wa||sp?.waA||sp?.waTimA);check(sp?.timB,sp?.waB||sp?.waTimB||sp?.waLawan);});
@@ -34928,6 +34951,7 @@ function collectTeams(){
     if(time > it.last){ it.last = time; it.sourceName = raw; }
   };
   (gc.memberRawEntries || []).forEach(m => add(m?.nama, 'Member', recordTime(m, m?.key)));
+  (gc.memberRawEntries || []).forEach(m => (window.__timTambahanList ? window.__timTambahanList(m?.timTambahan, m?.nama) : []).forEach(x => add(x, 'Member', recordTime(m, m?.key))));
   Object.entries(gc.memberTanpaJadwal || {}).forEach(([k, m]) => add(m?.nama, 'Member', recordTime(m, k)));
   Object.entries(gc.booking || {}).forEach(([k, b]) => add(b?.nama, 'Booking', recordTime(b, k)));
   Object.entries(gc.sparing || {}).forEach(([k, s]) => {
