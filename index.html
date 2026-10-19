@@ -14192,8 +14192,8 @@ function waDaftarNamaTim(){
     }
 
     inpNama.addEventListener('focus', () => {
-        // Muat seluruh riwayat booking agar nomor lama ikut terbaca.
-        try { if(typeof startBookingFullHistoryListener === 'function') startBookingFullHistoryListener(); } catch(_) {}
+        // (Dinonaktifkan) Dulu: memuat seluruh riwayat booking tiap kali kolom nama difokus. Kini hanya data bulan ini ke depan
+        // + profil tim/member/sparring yang dipakai untuk mencari nomor WA.
         dl.innerHTML = waDaftarNamaTim().map(n => '<option value="' + bentrokEsc(n) + '"></option>').join('');
     });
     ['input', 'change', 'blur'].forEach(ev => inpNama.addEventListener(ev, terapkan));
@@ -20385,7 +20385,7 @@ const diskonManualEl = document.getElementById('in-diskon-manual');
         /* 'bookingFull' (seluruh riwayat booking) kini ikut dimuat di latar belakang, PALING TERAKHIR setelah data lain,
            sehingga saat ceklis hijau muncul semua menu (laporan/rekap/gaji/pelunasan member/daftar tim) sudah siap
            dan popup "Menyiapkan data..." tidak muncul lagi saat pindah menu. */
-        const __LZ_BG_ORDER = ['minuman','memberTanpaJadwal','pelunasanMember','pengeluaran','teamProfiles','pendingSparingNames','adminJaga','adminJagaNames','adminJagaDefault','teamLogos','bookingFull'];
+        const __LZ_BG_ORDER = ['minuman','memberTanpaJadwal','pelunasanMember','pengeluaran','teamProfiles','pendingSparingNames','adminJaga','adminJagaNames','adminJagaDefault','teamLogos'];   /* bookingFull (seluruh riwayat booking) TIDAK lagi dimuat otomatis di latar belakang: hanya dimuat saat menu yang membutuhkannya dibuka */
         function __lzStart(key) {
             if (key === 'teamLogos') { try { startAdminTeamLogosListener(); } catch (_) {} return; }
             if (__LZ[key]) __LZ[key].start();
