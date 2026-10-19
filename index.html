@@ -15023,16 +15023,32 @@ const diskonManualEl = document.getElementById('in-diskon-manual');
             const b = String(hit.timB || '').trim().toLowerCase();
             return a === t ? b : a;
         };
-        // Ambil awalan list jam berurutan selama lawan sparingnya sama dengan jam pertama.
+        // Kunci pertandingan per slot — SAMA dengan aturan pengelompokan kartu
+        // "Jadwal Hari Ini": slot dengan lawan sparing (matched) = pasangan tim,
+        // slot tanpa lawan = 'team'. Beda kunci = kartu terpisah = tidak boleh digabung.
+        window.getSlotMatchKey = function(nama, tgl, jam){
+            const t = String(nama || '').replace(/\s*\(Booking\)$/i, '').trim().toLowerCase();
+            const j = String(jam || '').substring(0,5);
+            const hit = Object.values(globalCache.sparring || {}).find(sp => {
+                if(!sp) return false;
+                if(String(sp.tanggal || '') !== String(tgl || '')) return false;
+                if(String(sp.jam || '').substring(0,5) !== j) return false;
+                const a = String(sp.timA || '').trim().toLowerCase();
+                const b = String(sp.timB || '').trim().toLowerCase();
+                return a === t || b === t;
+            });
+            if(hit && String(hit.status || '').toLowerCase() === 'matched' && String(hit.timA || '').trim() && String(hit.timB || '').trim()){
+                return 'match:' + [String(hit.timA).trim().toLowerCase(), String(hit.timB).trim().toLowerCase()].sort().join('|');
+            }
+            return 'team';
+        };
+        // Ambil awalan list jam berurutan selama kunci pertandingannya sama dengan jam pertama.
         window.trimJamBySparingOpponent = function(nama, tgl, startJam, list, getJam){
-            const startOpp = window.getSparingOpponentAtHour(nama, tgl, startJam);
+            const startKey = window.getSlotMatchKey(nama, tgl, startJam);
             const out = [];
             for(const it of (list || [])){
                 const jj = getJam ? getJam(it) : it;
-                if(out.length){
-                    const opp = window.getSparingOpponentAtHour(nama, tgl, jj);
-                    if(startOpp && opp && opp !== startOpp) break;
-                }
+                if(out.length && window.getSlotMatchKey(nama, tgl, jj) !== startKey) break;
                 out.push(it);
             }
             return out;
@@ -25375,6 +25391,26 @@ return;
             tbodySelesai.innerHTML = '';
         }
 
+        // Samakan rentang jam & durasi diskon di Daily Recap dengan kartu "Jadwal Hari Ini".
+        window.normalizeRekapJamSlot = function(item, tgl){
+            try {
+                if(!item || Number(item.tambahanWaktuMenit || 0) !== 0) return item;
+                const ket = String(item.ket || '');
+                const m = ket.match(/\((\d{1,2}):(\d{2})\s*-\s*(\d{1,2}):(\d{2})\)/);
+                if(!m || m[2] !== '00' || m[4] !== '00') return item;
+                const sh = Number(m[1]), eh = Number(m[3]);
+                if(!(eh - sh > 1)) return item;
+                const nama = String(item.timNamaBersih || ket.replace(/^Pelunasan\s+/i,'').replace(/\s*\(.*$/,'')).trim();
+                const hours = [];
+                for(let h = sh; h < eh; h++) hours.push(String(h).padStart(2,'0') + ':00');
+                const trimmed = window.trimJamBySparingOpponent(nama, tgl, hours[0], hours);
+                if(trimmed.length >= hours.length) return item;
+                const first = trimmed[0], lastH = parseInt(trimmed[trimmed.length-1], 10);
+                const label = trimmed.length === 1 ? `(${first})` : `(${first}-${String(lastH+1).padStart(2,'0')}:00)`;
+                return { ...item, ket: ket.replace(m[0], label), durasiEfektifJam: trimmed.length };
+            } catch(e){ return item; }
+        };
+
         function formatRupiahDaily(nominal){
             return `Rp ${Number(nominal || 0).toLocaleString('id-ID')}`;
         }
@@ -25537,7 +25573,8 @@ return;
 
             // Uang Masuk manual yang dipilih "Uang Minuman" dihitung & ditampilkan di bagian Minuman.
             const __masukMinumanItems = [];
-            Object.entries(globalCache.pemasukan).forEach(([key, item]) => {
+            Object.entries(globalCache.pemasukan).forEach(([key, __rawItem]) => {
+                const item = (__rawItem && __rawItem.tgl === filterTgl) ? window.normalizeRekapJamSlot(__rawItem, filterTgl) : __rawItem;
                 if(item.tgl === filterTgl) {
                     if(item.masukKe === 'minuman') { __masukMinumanItems.push([key, item]); return; }
                     // Jika jumlah1 tersedia, termasuk ketika nilainya 0,
