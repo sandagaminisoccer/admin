@@ -11366,6 +11366,8 @@ Alur pengeluaran: dipotong dari sumber uang yang dipilih saat input (Uang Lapang
 <h3 class="font-black text-sm text-indigo-950">Tambah Jadwal Member / Status Baru</h3>
 <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
 <input class="p-2 rounded text-sm glass-input" id="m-nama" placeholder="Nama Tim / OFF (Contoh: OFF atau FHS FC)" required="" type="text"/>
+<input class="p-2 rounded text-sm glass-input" id="m-nama2" placeholder="Nama Tim ke-2 (opsional, 1 member banyak tim)" type="text" autocomplete="off"/>
+<input class="p-2 rounded text-sm glass-input" id="m-nama3" placeholder="Nama Tim ke-3 (opsional)" type="text" autocomplete="off"/>
 <input class="p-2 rounded text-sm glass-input" id="m-wa" placeholder="Nomor WhatsApp (opsional)" type="tel" inputmode="tel" autocomplete="tel"/>
 <select class="p-2 rounded text-sm glass-input" id="m-hari" required="">
 <option value="Senin">Senin</option><option value="Selasa">Selasa</option><option value="Rabu">Rabu</option>
@@ -17259,6 +17261,23 @@ const diskonManualEl = document.getElementById('in-diskon-manual');
             catch(error){ alert('Gagal menghapus jadwal: '+error.message); }
         };
 
+        // Helper: 1 member boleh punya sampai 2 nama tim tambahan (total 3 tim).
+        // Firebase bisa mengembalikan array atau object, jadi dinormalkan di sini.
+        window.__timTambahanList = function(v, namaUtama) {
+            const arr = Array.isArray(v) ? v : (v && typeof v === 'object' ? Object.values(v) : []);
+            const utama = String(namaUtama || '').trim().toLowerCase();
+            const seen = new Set(utama ? [utama] : []);
+            const out = [];
+            arr.forEach(x => {
+                const n = String(x || '').trim();
+                const k = n.toLowerCase();
+                if(!n || k === 'off' || k === '-' || seen.has(k)) return;
+                seen.add(k);
+                out.push(n);
+            });
+            return out.slice(0, 2);
+        };
+
         window.tambahMember = async (e) => {
             e.preventDefault();
             let nama = document.getElementById('m-nama').value.trim();
@@ -17274,7 +17293,13 @@ const diskonManualEl = document.getElementById('in-diskon-manual');
 
             try {
                 let wa = document.getElementById('m-wa')?.value.trim() || '';
-                await push(ref(db, 'member'), { nama, wa, hari, jam, mulai, berhenti: '' });
+                const timTambahan = window.__timTambahanList([
+                    document.getElementById('m-nama2')?.value,
+                    document.getElementById('m-nama3')?.value
+                ], nama);
+                const payloadMember = { nama, wa, hari, jam, mulai, berhenti: '' };
+                if(timTambahan.length) payloadMember.timTambahan = timTambahan;
+                await push(ref(db, 'member'), payloadMember);
                 window.__savingMemberLock = false;
                 alert(`Jadwal berhasil ditambahkan mulai ${mulai}!`);
                 document.getElementById('form-member').reset();
@@ -17324,6 +17349,12 @@ const diskonManualEl = document.getElementById('in-diskon-manual');
                             </select></div>
                         <div><label class="block text-xs font-black mb-1">Nama Tim</label>
                             <input id="edit-member-nama" value="${esc(current.nama)}" class="w-full p-2.5 rounded-xl border border-slate-300 font-bold text-sm"></div>
+                        <div id="edit-member-tim-tambahan-fields" class="space-y-3">
+                            <div><label class="block text-xs font-black mb-1">Nama Tim ke-2 <span class="font-bold text-slate-500">(opsional)</span></label>
+                                <input id="edit-member-nama2" value="${esc((window.__timTambahanList(current.timTambahan, current.nama)[0]) || '')}" class="w-full p-2.5 rounded-xl border border-slate-300 font-bold text-sm"></div>
+                            <div><label class="block text-xs font-black mb-1">Nama Tim ke-3 <span class="font-bold text-slate-500">(opsional)</span></label>
+                                <input id="edit-member-nama3" value="${esc((window.__timTambahanList(current.timTambahan, current.nama)[1]) || '')}" class="w-full p-2.5 rounded-xl border border-slate-300 font-bold text-sm"></div>
+                        </div>
                         <div id="edit-member-jadwal-fields" class="space-y-3">
                         <div><label class="block text-xs font-black mb-1">Hari</label>
                             <select id="edit-member-hari" class="w-full p-2.5 rounded-xl border border-slate-300 font-bold text-sm">
@@ -17426,7 +17457,11 @@ const diskonManualEl = document.getElementById('in-diskon-manual');
                 }
             }
             try {
-                await update(ref(db, 'member/' + key), { nama, hari, jam, mulai, wa });
+                const timTambahanBaru = window.__timTambahanList([
+                    document.getElementById('edit-member-nama2')?.value,
+                    document.getElementById('edit-member-nama3')?.value
+                ], nama);
+                await update(ref(db, 'member/' + key), { nama, hari, jam, mulai, wa, timTambahan: timTambahanBaru.length ? timTambahanBaru : null });
                 document.getElementById('modal-edit-member-permanent')?.remove();
                 showSuccessPopup('Jadwal member berhasil diperbarui secara permanen.');
             } catch(error) {
@@ -19845,6 +19880,7 @@ const diskonManualEl = document.getElementById('in-diskon-manual');
                     mulai: m.mulai,
                     berhenti: m.berhenti,
                     liburTanggal: m.liburTanggal || {},
+                    timTambahan: window.__timTambahanList(m.timTambahan, m.nama),
                     key: m.key
                 };
             });
@@ -21364,6 +21400,15 @@ const diskonManualEl = document.getElementById('in-diskon-manual');
             return `<div class="today-schedule-logo today-schedule-logo-sparing"${dataAttr} title="Logo ${escapeHtmlSparing(timA)} vs ${escapeHtmlSparing(timB)}">${adminLogoSideHtml(timA, false)}${adminLogoSideHtml(timB, false)}</div>`;
         }
 
+        // Kartu MEMBER dengan banyak tim (1 member = 2-3 nama tim): semua logo
+        // tampil berjejer dalam satu kotak logo, tiap sisi punya status sendiri.
+        function renderMultiTeamLogoHtml(names) {
+            const list = (names || []).map(n => String(n || '').trim()).filter(Boolean);
+            const states = list.map(n => getTeamLogoState(n));
+            const dataAttr = ` data-team-logo-multi="${list.map(n => encodeURIComponent(n)).join(',')}" data-logo-sig="${states.join('|')}"`;
+            return `<div class="today-schedule-logo today-schedule-logo-multi"${dataAttr} title="Logo ${escapeHtmlSparing(list.join(' / '))}">${list.map(n => adminLogoSideHtml(n, false)).join('')}</div>`;
+        }
+
         function showTeamLogoProgress(title='Mengupload logo...', text='Mohon tunggu, logo sedang diproses.') {
             document.getElementById('team-logo-progress-overlay')?.remove();
             document.body.insertAdjacentHTML('beforeend', `
@@ -22199,7 +22244,8 @@ const diskonManualEl = document.getElementById('in-diskon-manual');
                     jam: jamKey,
                     status: 'Member',
                     dp: 0,
-                    booking: false
+                    booking: false,
+                    timTambahan: window.__timTambahanList(cell.timTambahan, cell.nama)
                 };
             });
 
@@ -22418,6 +22464,15 @@ return;
                 const sparingLabel = isSparing
                     ? `${escapeHtmlSparing(sparingTimA)} <span class="sparing-vs-label">VS</span> ${escapeHtmlSparing(sparingTimB)}`
                     : escapeHtmlSparing(namaTampil);
+                // 1 member dengan 2-3 nama tim: semua nama + logo tampil di slot yang sama.
+                const timTambahanKartu = (!isSparing && !first.booking)
+                    ? window.__timTambahanList(first.timTambahan, first.nama) : [];
+                const isMultiTim = timTambahanKartu.length > 0;
+                const multiTimNames = isMultiTim
+                    ? [namaTampil, ...timTambahanKartu.map(n => String(n).trim().toUpperCase())] : [];
+                const cardLabelHtml = isMultiTim
+                    ? multiTimNames.map(n => `<span class="today-multi-name-line">${escapeHtmlSparing(n)}</span>`).join('')
+                    : sparingLabel;
                 const sparingStatusHtml = isSparing
                     ? `<div class="today-sparing-status-row">
                          <span class="today-sparing-status ${sparingStatusA === 'Member' ? 'is-member' : 'is-nonmember'}">${sparingStatusA === 'Member' ? 'MEMBER' : 'NON MEMBER'}</span>
@@ -22458,11 +22513,11 @@ return;
 
                 return `<div class="schedule-card rounded-xl border p-2.5 shadow-sm cursor-pointer" role="button" tabindex="0" title="Klik untuk mencatat uang masuk / pelunasan" onclick="bukaUangMasukDariJadwal(decodeURIComponent('${encodeURIComponent(String(first.nama || '')).replace("'", "%27")}'), '${jamPertama}', '${today}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();bukaUangMasukDariJadwal(decodeURIComponent('${encodeURIComponent(String(first.nama || '')).replace("'", "%27")}'), '${jamPertama}', '${today}')}"">
                     <div class="today-schedule-main-row">
-                        ${isSparing ? renderSparingLogoHtml(sparingItem.timA, sparingItem.timB) : renderTeamLogoHtml(namaTampil)}
+                        ${isSparing ? renderSparingLogoHtml(sparingItem.timA, sparingItem.timB) : (isMultiTim ? renderMultiTeamLogoHtml(multiTimNames) : renderTeamLogoHtml(namaTampil))}
                         <div class="today-schedule-times">${jamChips}</div>
                         <div class="today-schedule-info">
                             <div class="today-schedule-name-row ${isSparing ? 'today-sparing-name-row' : ''}">
-                                <div class="${isSparing ? 'schedule-team-sparing' : (isMember ? 'schedule-team-member' : 'schedule-team-nonmember')} font-black text-xs sm:text-sm truncate">${sparingLabel}</div>
+                                <div class="${isSparing ? 'schedule-team-sparing' : (isMember ? 'schedule-team-member' : 'schedule-team-nonmember')} font-black text-xs sm:text-sm truncate${isMultiTim ? ' today-multi-name' : ''}">${cardLabelHtml}</div>
                                 ${cardStatusBadge}
                             </div>
                             ${sparingStatusHtml}
@@ -22562,6 +22617,18 @@ return;
                 }
                 return true;
             }
+            if(el.dataset.teamLogoMulti) {
+                const names = el.dataset.teamLogoMulti.split(',').map(x => decodeURIComponent(x));
+                const states = names.map(n => getTeamLogoState(n));
+                const sig = states.join('|');
+                if(el.dataset.logoSig !== sig) {
+                    const old = String(el.dataset.logoSig || '').split('|');
+                    el.dataset.logoSig = sig;
+                    el.title = 'Logo ' + names.join(' / ');
+                    el.innerHTML = names.map((n, i) => adminLogoSideHtml(n, states[i] === 'found' && old[i] !== 'found')).join('');
+                }
+                return states.every(st => st !== 'loading');
+            }
             if(el.dataset.teamLogoA || el.dataset.teamLogoB) {
                 const timA = decodeURIComponent(el.dataset.teamLogoA || '');
                 const timB = decodeURIComponent(el.dataset.teamLogoB || '');
@@ -22628,7 +22695,8 @@ return;
                 // bukan serentak di akhir.
                 const keyToElements = new Map();
                 pending.forEach(el => {
-                    [el.dataset.teamLogoSingle, el.dataset.teamLogoA, el.dataset.teamLogoB]
+                    [el.dataset.teamLogoSingle, el.dataset.teamLogoA, el.dataset.teamLogoB,
+                     ...String(el.dataset.teamLogoMulti || '').split(',')]
                         .filter(Boolean)
                         .forEach(encoded => {
                             const key = getTeamLogoKey(decodeURIComponent(encoded));
@@ -36419,7 +36487,7 @@ html body #jdp-modal .jdp-seg .jdp-seg-b{flex:1 1 auto;min-width:max-content;pad
     const teams=new Map();
     const add=n=>{const name=String(n||'').trim();if(!name||name==='-'||/^off$/i.test(name))return;const k=norm(name);if(!teams.has(k))teams.set(k,name);};
     Object.values(gc.member||{}).forEach(m=>add(m&&m.nama));
-    (gc.memberRawEntries||[]).forEach(m=>add(m&&m.nama));
+    (gc.memberRawEntries||[]).forEach(m=>{add(m&&m.nama);(window.__timTambahanList?window.__timTambahanList(m&&m.timTambahan,m&&m.nama):[]).forEach(add);});
     /* Cadangan: ambil langsung dari database jika cache member belum terisi. */
     try{
       const db=window.__APP_FIREBASE_DB__,ref=window.__APP_FIREBASE_REF__,get=window.__APP_FIREBASE_GET__;
@@ -38209,6 +38277,23 @@ html body #page-more .more-menu-page .more-page-grid>button small{align-self:sta
     flex: none !important; width: 100% !important; max-width: none !important; margin: 0 !important;
   }
 }
+</style>
+<style id="member-multi-tim-v1">
+/* 1 member = 2-3 nama tim: logo berjejer sama besar, nama ditumpuk per baris */
+#today-schedule-panel .today-schedule-main-row > .today-schedule-logo.today-schedule-logo-multi{
+  display:flex !important;flex-direction:row !important;align-items:center !important;gap:2px !important;
+}
+#today-schedule-panel .today-schedule-main-row > .today-schedule-logo.today-schedule-logo-multi > img,
+#today-schedule-panel .today-schedule-main-row > .today-schedule-logo.today-schedule-logo-multi > .logo-slot{
+  flex:1 1 0 !important;width:auto !important;min-width:0 !important;max-width:none !important;
+  height:100% !important;padding:2px !important;box-sizing:border-box !important;object-fit:contain !important;
+}
+#today-schedule-panel .today-schedule-logo-multi > .logo-slot > .logo-none-stamp{width:100% !important;height:100% !important;padding:0 !important}
+#today-schedule-panel .today-schedule-logo-multi > .logo-slot > .logo-loading-spinner{width:min(60%,22px) !important}
+#today-schedule-panel .today-multi-name{
+  white-space:normal !important;overflow:visible !important;text-overflow:clip !important;line-height:1.25 !important;
+}
+#today-schedule-panel .today-multi-name .today-multi-name-line{display:block !important;}
 </style>
 </body>
 
