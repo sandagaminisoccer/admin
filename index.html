@@ -13855,6 +13855,7 @@ window.__APP_FIREBASE_PUSH__ = push;
 window.__APP_FIREBASE_REMOVE__ = remove;
 window.__APP_FIREBASE_UPDATE__ = update;
 window.__APP_FIREBASE_GET__ = get;
+window.__APP_FIREBASE_ONVALUE__ = onValue;
 window.__APP_FIREBASE_GET_RAW__ = __fbGet; /* pembacaan murni, tidak memicu kartu "Menyimpan data" */
 /* PRIORITAS PERTAMA: begitu Firebase siap, data poster (versi latar + gambar + font) langsung DIMINTA
    lebih dulu, sebelum data Jadwal Hari Ini, Member, dan data lain mulai diunduh. */
@@ -20488,10 +20489,14 @@ const diskonManualEl = document.getElementById('in-diskon-manual');
             // Sinkron ini bisa MENULIS booking, jadi hanya dijalankan setelah data booking
             // asli dari server tiba (bukan salinan lama di perangkat).
             if (window.__bookingRealDone) {
+                window.__sparingSyncCount = (window.__sparingSyncCount || 0) + 1;
                 try { await syncManualSparingToBooking(); } catch(error) { console.error('Sync Sparing -> Booking:', error); }
+                finally { window.__sparingSyncCount = Math.max(0, (window.__sparingSyncCount || 1) - 1); }
             } else {
+                window.__sparingSyncCount = (window.__sparingSyncCount || 0) + 1;
                 window.__bookingRealP.then(async () => {
                     try { await syncManualSparingToBooking(); } catch(error) { console.error('Sync Sparing -> Booking:', error); }
+                    finally { window.__sparingSyncCount = Math.max(0, (window.__sparingSyncCount || 1) - 1); }
                     scheduleRender(renderSparing); scheduleRender(renderGridJadwal); scheduleRender(renderTodaySchedule); scheduleRender(renderTabelBooking);
                 });
             }
@@ -20706,6 +20711,70 @@ const diskonManualEl = document.getElementById('in-diskon-manual');
                     el.setAttribute('aria-label', state === 'done' ? 'Semua data sudah masuk' : 'Memuat data');
                 }
             }, 500);
+        })();
+
+
+        /* ---------- Status khusus data SPARING (kanan atas, di kiri lingkaran status data) ----------
+           Tampil selama data sparing masih diminta/diunduh atau sedang disinkronkan ke booking.
+           Hanya penanda: tidak menghalangi klik, aplikasi tetap bisa dipakai. Berubah hijau sebentar saat selesai. */
+        (function sparingStatusPill() {
+            if (!document.getElementById('sparing-status-style')) {
+                const st = document.createElement('style');
+                st.id = 'sparing-status-style';
+                st.textContent = '#sparing-status{position:fixed;z-index:99991;top:16px;right:56px;height:22px;box-sizing:border-box;display:none;align-items:center;gap:6px;padding:0 10px 0 8px;border-radius:999px;background:rgba(37,99,235,.95);color:#fff;font:800 10px/1 system-ui,-apple-system,Segoe UI,sans-serif;white-space:nowrap;pointer-events:none;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.2)}'
+                    + '#sparing-status.is-on{display:flex}'
+                    + '#sparing-status i{width:10px;height:10px;box-sizing:border-box;border-radius:50%;border:2px solid rgba(255,255,255,.35);border-top-color:#fff;animation:spsspin .8s linear infinite}'
+                    + '#sparing-status b{position:absolute;left:0;bottom:0;height:2px;width:40%;background:rgba(255,255,255,.9);animation:spsbar 1.1s ease-in-out infinite}'
+                    + '#sparing-status[data-state="done"]{background:rgba(22,163,74,.96)}'
+                    + '#sparing-status[data-state="done"] i,#sparing-status[data-state="done"] b{display:none}'
+                    + '@keyframes spsspin{to{transform:rotate(360deg)}}'
+                    + '@keyframes spsbar{0%{left:-40%}100%{left:100%}}';
+                document.head.appendChild(st);
+            }
+            let el = document.getElementById('sparing-status');
+            if (!el) {
+                el = document.createElement('div');
+                el.id = 'sparing-status'; el.setAttribute('role', 'status'); el.setAttribute('aria-live', 'polite');
+                document.body.appendChild(el);
+            }
+            function busy() {
+                if (__dataPending.has('sparring')) return true;      /* diminta, belum tiba dari server */
+                if (__replayPending.has('sparring')) return true;    /* baru salinan lama di perangkat, menunggu data asli */
+                if ((window.__sparingSyncCount || 0) > 0) return true; /* sedang sinkron sparing -> booking */
+                return !(__LZ.sparring && __LZ.sparring.loaded);
+            }
+            function place() {
+                try {
+                    const ds = document.getElementById('data-status');
+                    const r = ds && ds.getBoundingClientRect();
+                    if (r && r.width) {
+                        el.style.top = Math.round(r.top + r.height / 2 - 11) + 'px';
+                        el.style.right = Math.round(window.innerWidth - r.left + 8) + 'px';
+                    }
+                } catch (_) {}
+            }
+            function show(state) {
+                if (el.getAttribute('data-state') !== state || !el.classList.contains('is-on')) {
+                    el.setAttribute('data-state', state);
+                    el.innerHTML = state === 'done' ? '<span>✓ Sparing</span>' : '<i></i><span>Memuat sparing</span><b></b>';
+                    el.classList.add('is-on');
+                }
+            }
+            let startedAt = 0, gaveUp = false, hideTimer = null;
+            setInterval(() => {
+                place();
+                const now = Date.now();
+                if (busy()) {
+                    clearTimeout(hideTimer); hideTimer = null;
+                    if (!startedAt) startedAt = now;
+                    if (now - startedAt > 60000) { gaveUp = true; el.classList.remove('is-on'); return; }  /* batas aman: jangan menempel selamanya */
+                    if (!gaveUp) show('loading');
+                } else if (startedAt) {
+                    startedAt = 0;
+                    if (!gaveUp) { show('done'); hideTimer = setTimeout(() => el.classList.remove('is-on'), 2200); }
+                    gaveUp = false;
+                }
+            }, 400);
         })();
 
         // Menentukan harga lapangan berdasarkan hari dan jam booking.
@@ -25318,10 +25387,13 @@ return;
                     else { member1 = 0; member2 = 0; }
                 }
 
-                if (isMemberStatus(status1) && member1 > 0) {
+                // Pengurangan waktu (mis. -30 menit) = TANPA diskon member, jadi
+                // keterangan diskon member tidak ditampilkan di Daily Recap.
+                const kurangWaktuTanpaDiskonMember = Number(data.tambahanWaktuMenit || 0) < 0;
+                if (!kurangWaktuTanpaDiskonMember && isMemberStatus(status1) && member1 > 0) {
                     details.push(`🏷️ Diskon Member Tim 1: ${rupiah(member1)}`);
                 }
-                if (isMemberStatus(status2) && member2 > 0) {
+                if (!kurangWaktuTanpaDiskonMember && isMemberStatus(status2) && member2 > 0) {
                     details.push(`🏷️ Diskon Member Tim 2: ${rupiah(member2)}`);
                 }
 
@@ -33291,9 +33363,14 @@ body.jadwal-uang-masuk-modal-active #page-masuk {
 
 
     const getHistoryCache = () => window.__sandagaGlobalCache || {booking:{},member:{},pemasukan:{},pelunasanMember:{},lunasDarurat:{},bookingBatal:{},riwayatStatusManual:{}};
-    if(typeof onValue==='function' && typeof ref==='function' && typeof db!=='undefined'){
+    const __rsmDb=()=>window.__APP_FIREBASE_DB__, __rsmRef=()=>window.__APP_FIREBASE_REF__, __rsmUpdate=()=>window.__APP_FIREBASE_UPDATE__, __rsmOnValue=()=>window.__APP_FIREBASE_ONVALUE__;
+    (function attachRiwayatStatusManualListener(tries){
+        if(!(typeof __rsmOnValue()==='function' && typeof __rsmRef()==='function' && __rsmDb())){
+            if(tries<100) setTimeout(()=>attachRiwayatStatusManualListener(tries+1),300);
+            return;
+        }
         try {
-            onValue(ref(db,'riwayatStatusManual'),snapshot=>{
+            __rsmOnValue()(__rsmRef()(__rsmDb(),'riwayatStatusManual'),snapshot=>{
                 const cache=getHistoryCache();
                 cache.riwayatStatusManual=snapshot.val()||{};
                 if(historySelectedDate){
@@ -33303,7 +33380,7 @@ body.jadwal-uang-masuk-modal-active #page-masuk {
         } catch(e) {
             console.warn('Listener status manual riwayat gagal dipasang:',e);
         }
-    }
+    })(0);
     const historyGetNamaHari = dateStr => { const d=new Date(String(dateStr)+'T00:00:00'); return ['Minggu','Senin','Selasa','Rabu','Kamis','Jumat','Sabtu'][d.getDay()]; };
     const historyMemberScheduled = (member,dateStr) => {
         if(!member || !dateStr) return false;
@@ -33752,7 +33829,8 @@ body.jadwal-uang-masuk-modal-active #page-masuk {
         if(!dateKey || !nama || !slotTimes.length || !['LUNAS','TIDAK LUNAS'].includes(status)) return;
 
         try {
-            if(typeof update!=='function' || typeof ref!=='function' || typeof db==='undefined'){
+            const updateFn=__rsmUpdate(), refFn=__rsmRef(), dbRef=__rsmDb();
+            if(typeof updateFn!=='function' || typeof refFn!=='function' || !dbRef){
                 throw new Error('Koneksi database tidak tersedia.');
             }
 
@@ -33763,7 +33841,7 @@ body.jadwal-uang-masuk-modal-active #page-masuk {
                 const key=historyManualStatusKey(dateKey,nama,jam);
                 const data={dateKey,nama:normName(nama),jam:String(jam).substring(0,5),status,updatedAt:Date.now()};
                 cache.riwayatStatusManual[key]=data;
-                return update(ref(db,'riwayatStatusManual/'+key),data);
+                return updateFn(refFn(dbRef,'riwayatStatusManual/'+key),data);
             }));
 
             document.getElementById('modal-edit-status-riwayat')?.remove();
