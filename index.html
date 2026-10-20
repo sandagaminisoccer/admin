@@ -36582,36 +36582,45 @@ html body #jdp-modal .jdp-multi-panel{max-height:min(28vh,190px);max-height:min(
     ctx.save(); ctx.scale(K, K); drawGrid(ctx, false); ctx.restore();
   }
 
-  /* Teks nama tim: 1 baris, kalau tidak muat dipecah 2 baris, terakhir dipotong */
+  /* Teks nama tim: kartu selalu berukuran tetap. 1 baris bila muat; kalau tidak muat dipecah 2 baris
+     (seimbang per kata, atau per huruf bila satu kata terlalu panjang); terakhir baru dipotong dengan "…" */
   function fitText(ctx, text, maxW, maxH){
-    var s, lines;
-    for (s = 11.5; s >= 9; s -= 0.5) {
+    var s, i, k;
+    for (s = 11.5; s >= 9.5; s -= 0.5) {
       ctx.font = '800 ' + s + 'px ' + MON;
       if (ctx.measureText(text).width <= maxW) return { size: s, lines: [text] };
     }
-    var words = text.split(/\s+/);
-    if (words.length > 1) {
-      for (s = 10.5; s >= 7.5; s -= 0.5) {
-        ctx.font = '800 ' + s + 'px ' + MON;
-        lines = [''];
-        var ok = true;
-        for (var i = 0; i < words.length; i++) {
-          var tryLine = lines[lines.length - 1] ? lines[lines.length - 1] + ' ' + words[i] : words[i];
-          if (ctx.measureText(tryLine).width <= maxW) lines[lines.length - 1] = tryLine;
-          else if (lines[lines.length - 1] && lines.length < 2 && ctx.measureText(words[i]).width <= maxW) lines.push(words[i]);
-          else { ok = false; break; }
-        }
-        if (ok && lines.length * s * 1.12 <= maxH) return { size: s, lines: lines };
+    var words = text.split(/\s+/).filter(Boolean);
+    function w(t){ return ctx.measureText(t).width; }
+    function split2(sz){
+      ctx.font = '800 ' + sz + 'px ' + MON;
+      var best = null, bw = Infinity, l1, l2, m;
+      for (i = 1; i < words.length; i++) {
+        l1 = words.slice(0, i).join(' '); l2 = words.slice(i).join(' ');
+        m = Math.max(w(l1), w(l2));
+        if (m <= maxW && m < bw) { bw = m; best = [l1, l2]; }
       }
+      if (best) return best;
+      /* satu kata panjang (atau kata tunggal tak muat): pecah per huruf */
+      var flat = words.join(' ');
+      for (k = flat.length - 1; k >= 1; k--) {
+        l1 = flat.slice(0, k); l2 = flat.slice(k).replace(/^\s+/, '');
+        if (w(l1) <= maxW && w(l2) <= maxW) return [l1, l2];
+      }
+      return null;
     }
-    for (s = 9; s >= 7; s -= 0.5) {
-      ctx.font = '800 ' + s + 'px ' + MON;
-      if (ctx.measureText(text).width <= maxW) return { size: s, lines: [text] };
+    for (s = 10.5; s >= 7; s -= 0.5) {
+      if (2 * s * 1.12 > maxH) continue;
+      var two = split2(s);
+      if (two) return { size: s, lines: two };
     }
-    ctx.font = '800 7px ' + MON;
-    var t = text;
-    while (t.length > 1 && ctx.measureText(t + '…').width > maxW) t = t.slice(0, -1);
-    return { size: 7, lines: [t + '…'] };
+    /* terakhir: 2 baris ukuran kecil, baris kedua dipotong dengan "…" */
+    s = 7; ctx.font = '800 ' + s + 'px ' + MON;
+    var flat2 = words.join(' '), cut = flat2.length;
+    while (cut > 1 && w(flat2.slice(0, cut)) > maxW) cut--;
+    var r1 = flat2.slice(0, cut).trim(), r2 = flat2.slice(cut).trim();
+    while (r2.length > 1 && w(r2 + '…') > maxW) r2 = r2.slice(0, -1);
+    return { size: s, lines: r2 ? [r1, r2 + (r2.length < flat2.slice(cut).trim().length ? '…' : '')] : [r1] };
   }
 
   /* ---------- Warna nama tim (bisa dipilih admin, tersimpan di perangkat) ---------- */
@@ -36714,6 +36723,8 @@ html body #jdp-modal .jdp-multi-panel{max-height:min(28vh,190px);max-height:min(
     var f = fitText(ctx, text.toUpperCase(), w - 8, h - 5);
     ctx.font = '800 ' + f.size + 'px ' + MON;
     var lh = f.size * 1.12, top = y + h / 2 - (f.lines.length - 1) * lh / 2;
+    /* kartu ukurannya tetap: teks dipotong di batas kartu supaya tidak pernah keluar / menggeser posisi */
+    rr(ctx, x, y, w, h, 8); ctx.clip();
     f.lines.forEach(function(ln, i){ ctx.fillText(ln, x + w / 2, top + i * lh + 0.5); });
     ctx.restore();
   }
