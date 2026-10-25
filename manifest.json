@@ -1,6 +1,6 @@
 {
   "name": "ADMIN SANDAGA MINISOCCER 1",
-  "short_name": "MINISOCCER",
+  "short_name": "ADMIN 1",
   "start_url": "./index.html",
   "display": "standalone",
   "background_color": "#000000",
