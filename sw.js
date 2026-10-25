@@ -2,7 +2,7 @@
    Tujuan: aplikasi cepat dibuka & tetap hidup saat sinyal lemah/offline.
    Data Firebase TIDAK disentuh di sini (itu ditangani IndexedDB + Firebase di dalam aplikasi).
    >>> Setiap kali upload versi baru index.html ke GitHub, naikkan angka VERSION di bawah. <<< */
-const VERSION = 'v1';
+const VERSION = 'v2';
 const SHELL = 'miniso1-shell-' + VERSION;
 const LIBS = 'miniso1-libs-' + VERSION;
 const SHELL_FILES = ['./', 'index.html', 'manifest.json', 'ikon.png'];
